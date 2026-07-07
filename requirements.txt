@@ -1,0 +1,12 @@
+# Runtime dependencies for the FASM pipeline image/library.
+# Prefect-agnostic: only what the ETL code actually imports. The orchestration
+# layer (Prefect) lives in a separate repo and layers on top of this.
+boto3>=1.26
+geopandas>=0.13
+GeoAlchemy2>=0.13
+numpy>=1.24
+pandas>=2.0
+psycopg2-binary>=2.9
+python-dotenv>=1.0
+shapely>=2.0
+SQLAlchemy>=2.0

@@ -1,0 +1,1 @@
+SELECT * FROM fire_summary.north_america_detects_vw;

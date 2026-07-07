@@ -1,0 +1,20 @@
+select
+	fasm_fire_id,
+	source_id,
+	latitude,
+	longitude,
+	incident_name,
+	start_time,
+	last_updated,
+	fire_type,
+	fire_cause,
+	fire_behavior,
+	cumulative_acres,
+	cumulative_ha,
+	complex_name,
+	inciweb_url,
+	calfire_url,
+	canadian_incident_url,
+	has_perimeter,
+	perimeter_last_updated
+from fire_summary.fasm_fire_points;
