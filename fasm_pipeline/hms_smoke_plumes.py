@@ -1,7 +1,5 @@
 """HMS smoke plumes ingest -> pwfsl_map.hms_smoke_plume (+ S3 status file)."""
 
-
-
 import json
 import logging
 from datetime import datetime, timezone
@@ -22,7 +20,6 @@ from fasm_pipeline.time_util import parse_hms_smoke_datetime
 logger = logging.getLogger(__name__)
 
 
-
 def extract():
     s3 = init_s3()
     results = s3.get_object(Bucket=airfire_exports_bucket(), Key=config.HMS_SMOKE_S3_KEY)
@@ -30,7 +27,6 @@ def extract():
     features = data["features"]
     logger.info(f"Retrieved {len(features)} HMS features from S3")
     return features
-
 
 
 def transform(data):
@@ -73,7 +69,6 @@ def truncate():
     conn.commit()
     conn.close()
     logger.info(f"Truncated {table} table")
-
 
 
 def load(gdf):

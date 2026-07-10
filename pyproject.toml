@@ -32,8 +32,16 @@ include = ["fasm_pipeline*"]
 [tool.setuptools.package-data]
 fasm_pipeline = ["sql/*.sql"]
 
+
 [dependency-groups]
 dev = [
     "ruff",
     "pytest",
 ]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "S"]
+ignore = ["S608"]

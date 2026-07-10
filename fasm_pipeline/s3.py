@@ -4,6 +4,7 @@ Two credential sets are used:
   - AirFire (AWS_*)      — reads source data from AFE_BUCKET
   - EPA     (EPA_AWS_*)  — writes status/layer artifacts to EPA_BUCKET
 """
+
 import os
 
 import boto3

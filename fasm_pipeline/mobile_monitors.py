@@ -5,8 +5,6 @@ Loads two sources into their own tables:
   WRCC   -> pwfsl_map.wrcc_monitors
 """
 
-
-
 import json
 import logging
 
@@ -23,11 +21,18 @@ from fasm_pipeline.time_util import add_latency, add_status, offset_hour
 logger = logging.getLogger(__name__)
 
 NORM_COLS = [
-    "unit_id", "latitude", "longitude", "utc_ts", "timezone",
-    "raw_pm25", "nowcast", "site_name", "deployment_type",
-    "aqsid", "full_aqsid",
+    "unit_id",
+    "latitude",
+    "longitude",
+    "utc_ts",
+    "timezone",
+    "raw_pm25",
+    "nowcast",
+    "site_name",
+    "deployment_type",
+    "aqsid",
+    "full_aqsid",
 ]
-
 
 
 def extract(key, source_name):
@@ -37,7 +42,6 @@ def extract(key, source_name):
     df = pd.json_normalize(json_data["features"])
     logger.info(f"EXTRACTED {len(df)} {source_name} records from S3")
     return df
-
 
 
 def normalize(df, source_name):
@@ -69,7 +73,6 @@ def normalize(df, source_name):
     return norm_df
 
 
-
 def process(df, source_name):
     df.raw_pm25 = df.raw_pm25.astype(float).clip(lower=0)
     df.nowcast = df.nowcast.astype(float).clip(lower=0)
@@ -84,7 +87,6 @@ def process(df, source_name):
     return df
 
 
-
 def load(df, table_name, source_name):
     table = config.qualified(table_name)
     conn = get_ts_db_conn()
@@ -94,10 +96,7 @@ def load(df, table_name, source_name):
             if df.empty:
                 # Truncate, load nothing: the table now correctly reflects
                 # that no monitors are currently deployed for this source.
-                logger.warning(
-                    f"No {source_name} mobile monitors found — "
-                    f"truncated {table}, loaded 0 records"
-                )
+                logger.warning(f"No {source_name} mobile monitors found — truncated {table}, loaded 0 records")
             else:
                 execute_values(
                     cur=c,

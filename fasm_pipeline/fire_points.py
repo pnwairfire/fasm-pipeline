@@ -1,7 +1,5 @@
 """FASM fire points ingest -> pwfsl_map.fasm_fire_points."""
 
-
-
 import logging
 
 import pandas as pd
@@ -14,12 +12,25 @@ from fasm_pipeline.sql_util import read_sql
 logger = logging.getLogger(__name__)
 
 QUERY_COLUMNS = [
-    "fasm_fire_id", "source_id", "latitude", "longitude", "incident_name",
-    "start_time", "last_updated", "fire_type", "fire_cause", "fire_behavior",
-    "cumulative_acres", "cumulative_ha", "complex_name", "inciweb_url",
-    "calfire_url", "canadian_incident_url", "has_perimeter", "perimeter_last_updated",
+    "fasm_fire_id",
+    "source_id",
+    "latitude",
+    "longitude",
+    "incident_name",
+    "start_time",
+    "last_updated",
+    "fire_type",
+    "fire_cause",
+    "fire_behavior",
+    "cumulative_acres",
+    "cumulative_ha",
+    "complex_name",
+    "inciweb_url",
+    "calfire_url",
+    "canadian_incident_url",
+    "has_perimeter",
+    "perimeter_last_updated",
 ]
-
 
 
 def extract():
@@ -36,17 +47,30 @@ def extract():
     return result
 
 
-
 def transform(result):
     df = pd.DataFrame(result, columns=QUERY_COLUMNS)
 
     # Fix None -> nan coercion
-    str_cols = ["incident_name", "complex_name", "fire_cause", "fire_type",
-                "fire_behavior", "inciweb_url", "calfire_url", "canadian_incident_url"]
+    str_cols = [
+        "incident_name",
+        "complex_name",
+        "fire_cause",
+        "fire_type",
+        "fire_behavior",
+        "inciweb_url",
+        "calfire_url",
+        "canadian_incident_url",
+    ]
     df[str_cols] = df[str_cols].astype(object).where(df[str_cols].notna(), other=None)
 
     # Title case string columns
-    for col in ["incident_name", "complex_name", "fire_cause", "fire_type", "fire_behavior"]:
+    for col in [
+        "incident_name",
+        "complex_name",
+        "fire_cause",
+        "fire_type",
+        "fire_behavior",
+    ]:
         df[col] = df[col].str.title()
 
     # Format datetimes - convert NaT to None for postgres compatibility
@@ -55,7 +79,6 @@ def transform(result):
 
     logger.info(f"TRANSFORMED {len(df)} fire points")
     return df
-
 
 
 def load(df):

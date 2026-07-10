@@ -9,6 +9,7 @@ Two external databases are used:
 
 Credentials come from environment variables (see ``.example.env``).
 """
+
 import os
 from urllib.parse import quote_plus
 
@@ -36,8 +37,7 @@ def _get_config(env_vars):
     """
     if not isinstance(env_vars, dict):
         raise ValueError(
-            f"env_vars must be a dict mapping keys to env var names. "
-            f"Required keys: {REQUIRED_KEYS}. Optional: port"
+            f"env_vars must be a dict mapping keys to env var names. Required keys: {REQUIRED_KEYS}. Optional: port"
         )
 
     missing_keys = REQUIRED_KEYS - env_vars.keys()
