@@ -5,13 +5,7 @@ Loads two sources into their own tables:
   WRCC   -> pwfsl_map.wrcc_monitors
 """
 
-try:
-    from prefect import task
-except ImportError:
-    def task(fn=None, **kwargs):
-        if fn is None:
-            return lambda f: f
-        return fn
+
 
 import json
 import logging
@@ -35,7 +29,7 @@ NORM_COLS = [
 ]
 
 
-@task
+
 def extract(key, source_name):
     s3 = init_s3()
     results = s3.get_object(Bucket=airfire_exports_bucket(), Key=key)
@@ -45,7 +39,7 @@ def extract(key, source_name):
     return df
 
 
-@task
+
 def normalize(df, source_name):
     # An empty feed (pd.json_normalize([]) -> 0 rows, 0 columns) is a
     # legitimate state for these mobile/temporary monitors. Return an empty
@@ -75,7 +69,7 @@ def normalize(df, source_name):
     return norm_df
 
 
-@task
+
 def process(df, source_name):
     df.raw_pm25 = df.raw_pm25.astype(float).clip(lower=0)
     df.nowcast = df.nowcast.astype(float).clip(lower=0)
@@ -90,7 +84,7 @@ def process(df, source_name):
     return df
 
 
-@task
+
 def load(df, table_name, source_name):
     table = config.qualified(table_name)
     conn = get_ts_db_conn()

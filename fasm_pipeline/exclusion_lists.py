@@ -4,13 +4,7 @@
   Elwood    -> pwfsl_map.elwood_exclusion
 """
 
-try:
-    from prefect import task
-except ImportError:
-    def task(fn=None, **kwargs):
-        if fn is None:
-            return lambda f: f
-        return fn
+
 
 import logging
 

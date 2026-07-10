@@ -1,12 +1,6 @@
 """FASM fire perimeters ingest -> pwfsl_map.fasm_fire_perimeters."""
 
-try:
-    from prefect import task
-except ImportError:
-    def task(fn=None, **kwargs):
-        if fn is None:
-            return lambda f: f
-        return fn
+
 
 import logging
 
@@ -22,7 +16,7 @@ from fasm_pipeline.sql_util import read_sql
 logger = logging.getLogger(__name__)
 
 
-@task
+
 def extract():
     query_sql = read_sql("query_fasm_fire_perimeters.sql").replace("\n", " ")
     airfire_engine = get_airfire_engine()
@@ -49,7 +43,7 @@ def _convert_to_multipolygon(gdf):
     return gdf
 
 
-@task
+
 def transform(gdf):
     gdf = gdf.dissolve(by="fasm_fire_id", aggfunc="max")
     gdf = gdf.sort_values("cumulative_acres", ascending=False).drop_duplicates("incident_name").sort_index()
@@ -61,7 +55,7 @@ def transform(gdf):
     return gdf
 
 
-@task
+
 def load(gdf):
     conn = get_ts_db_conn()
     try:

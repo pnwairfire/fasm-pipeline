@@ -1,12 +1,6 @@
 """FASM fire points ingest -> pwfsl_map.fasm_fire_points."""
 
-try:
-    from prefect import task
-except ImportError:
-    def task(fn=None, **kwargs):
-        if fn is None:
-            return lambda f: f
-        return fn
+
 
 import logging
 
@@ -27,7 +21,7 @@ QUERY_COLUMNS = [
 ]
 
 
-@task
+
 def extract():
     query_sql = read_sql("query_fasm_fire_points.sql").replace("\n", " ")
 
@@ -42,7 +36,7 @@ def extract():
     return result
 
 
-@task
+
 def transform(result):
     df = pd.DataFrame(result, columns=QUERY_COLUMNS)
 
@@ -63,7 +57,7 @@ def transform(result):
     return df
 
 
-@task
+
 def load(df):
     table = config.qualified(config.FIRE_POINTS_TABLE)
     conn = get_ts_db_conn()

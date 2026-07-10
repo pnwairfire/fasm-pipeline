@@ -1,12 +1,6 @@
 """Smoke outlooks ingest -> pwfsl_map.outlooks (+ legacy S3 GeoJSON publish)."""
 
-try:
-    from prefect import task
-except ImportError:
-    def task(fn=None, **kwargs):
-        if fn is None:
-            return lambda f: f
-        return fn
+
 
 import json
 import logging
@@ -55,7 +49,7 @@ def write_geojson_to_s3(geojson):
     logger.info(f"WROTE {len(geojson['features'])} outlooks to s3://.../{config.OUTLOOKS_OUTPUT_S3_KEY}")
 
 
-@task
+
 def transform(data):
     parsed_data = [[
         item["properties"]["outlook_path"],
@@ -100,7 +94,7 @@ def truncate():
     logger.info(f"TRUNCATED {table}")
 
 
-@task
+
 def load(gdf):
     table = config.qualified(config.OUTLOOKS_TABLE)
     engine = get_ts_engine()

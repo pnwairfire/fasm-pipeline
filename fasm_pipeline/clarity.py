@@ -1,12 +1,6 @@
 """Clarity sensors ingest -> pwfsl_map.clarity_sensors."""
 
-try:
-    from prefect import task
-except ImportError:
-    def task(fn=None, **kwargs):
-        if fn is None:
-            return lambda f: f
-        return fn
+
 
 import json
 import logging
@@ -29,7 +23,7 @@ NORM_COLS = [
 ]
 
 
-@task
+
 def extract():
     s3 = init_s3()
     results = s3.get_object(Bucket=airfire_exports_bucket(), Key=config.CLARITY_S3_KEY)
@@ -39,7 +33,7 @@ def extract():
     return df
 
 
-@task
+
 def normalize(df):
     norm_df = pd.DataFrame(columns=NORM_COLS)
     norm_df.unit_id = df["properties.monitorID"]
@@ -54,7 +48,7 @@ def normalize(df):
     return norm_df
 
 
-@task
+
 def process(df):
     df.raw_pm25 = df.raw_pm25.astype(float).clip(lower=0)
     df.nowcast = df.nowcast.astype(float).clip(lower=0)
@@ -69,7 +63,7 @@ def process(df):
     return df
 
 
-@task
+
 def load(df):
     table = config.qualified(config.CLARITY_TABLE)
     conn = get_ts_db_conn()

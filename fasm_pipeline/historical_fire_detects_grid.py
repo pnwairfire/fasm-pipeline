@@ -1,12 +1,6 @@
 """Historical fire detects grid ingest -> pwfsl_map.fire_detects_historical_grid."""
 
-try:
-    from prefect import task
-except ImportError:
-    def task(fn=None, **kwargs):
-        if fn is None:
-            return lambda f: f
-        return fn
+
 
 import logging
 
@@ -20,7 +14,7 @@ from fasm_pipeline.sql_util import read_sql
 logger = logging.getLogger(__name__)
 
 
-@task
+
 def extract():
     query_sql = read_sql("query_fire_detects_grid.sql").replace("\n", " ")
 
@@ -53,7 +47,7 @@ def truncate():
     logger.info(f"TRUNCATED {table}")
 
 
-@task
+
 def load(gdf):
     table = config.qualified(config.FIRE_DETECTS_GRID_TABLE)
     engine = get_ts_engine()
