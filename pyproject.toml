@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "fasm-pipeline"
 version = "0.1.0"
 description = "FASM wildfire & air-quality ETL pipelines. Prefect-agnostic."
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.26",
     "geopandas>=0.13",
@@ -31,3 +31,9 @@ include = ["fasm_pipeline*"]
 
 [tool.setuptools.package-data]
 fasm_pipeline = ["sql/*.sql"]
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "pytest",
+]

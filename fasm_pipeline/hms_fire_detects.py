@@ -1,4 +1,13 @@
 """HMS fire detects ingest -> pwfsl_map.fire_detects."""
+
+try:
+    from prefect import task
+except ImportError:
+    def task(fn=None, **kwargs):
+        if fn is None:
+            return lambda f: f
+        return fn
+
 import json
 import logging
 from datetime import datetime, timedelta
@@ -24,6 +33,7 @@ def parse_hms_datetime(yearday, time):
     return date
 
 
+@task
 def extract():
     s3 = init_s3()
     results = s3.get_object(Bucket=airfire_exports_bucket(), Key=config.HMS_FIRE_S3_KEY)
@@ -52,6 +62,7 @@ def extract():
     return data
 
 
+@task
 def transform(data):
     # Pull records from the data
     payload = [i["properties"] for i in data]
@@ -82,6 +93,7 @@ def transform(data):
     return norm_df
 
 
+@task
 def load(df):
     table = config.qualified(config.FIRE_DETECTS_TABLE)
     conn = get_ts_db_conn()

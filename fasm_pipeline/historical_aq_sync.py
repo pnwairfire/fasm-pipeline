@@ -1,4 +1,13 @@
 """Historical AQ snapshot sync — runs a set of SQL files against the TS DB."""
+
+try:
+    from prefect import task
+except ImportError:
+    def task(fn=None, **kwargs):
+        if fn is None:
+            return lambda f: f
+        return fn
+
 import logging
 
 from fasm_pipeline.db import get_ts_db_conn
@@ -26,30 +35,35 @@ def run_sql_file(name: str) -> int:
     return rowcount
 
 
+@task
 def sync_purple_air():
     rowcount = run_sql_file("historical_purple_air.sql")
     logger.info(f"SYNCED purple_air: {rowcount} rows affected")
     return f"💜 purple_air: {rowcount} rows"
 
 
+@task
 def sync_permanent_monitors():
     rowcount = run_sql_file("historical_permanent_monitors.sql")
     logger.info(f"SYNCED permanent_monitors: {rowcount} rows affected")
     return f"🏛️ permanent_monitors: {rowcount} rows"
 
 
+@task
 def sync_airnow_sensors():
     rowcount = run_sql_file("historical_airnow_sensors.sql")
     logger.info(f"SYNCED airnow_sensors: {rowcount} rows affected")
     return f"📡 airnow_sensors: {rowcount} rows"
 
 
+@task
 def sync_clarity_sensors():
     rowcount = run_sql_file("historical_clarity_sensors.sql")
     logger.info(f"SYNCED clarity_sensors: {rowcount} rows affected")
     return f"🌫️ clarity_sensors: {rowcount} rows"
 
 
+@task
 def sync_mobile_monitors():
     rowcount = run_sql_file("historical_mobile_monitors.sql")
     logger.info(f"SYNCED mobile_monitors: {rowcount} rows affected")

@@ -1,4 +1,13 @@
 """HMS smoke plumes ingest -> pwfsl_map.hms_smoke_plume (+ S3 status file)."""
+
+try:
+    from prefect import task
+except ImportError:
+    def task(fn=None, **kwargs):
+        if fn is None:
+            return lambda f: f
+        return fn
+
 import json
 import logging
 from datetime import datetime, timezone
@@ -19,6 +28,7 @@ from fasm_pipeline.time_util import parse_hms_smoke_datetime
 logger = logging.getLogger(__name__)
 
 
+@task
 def extract():
     s3 = init_s3()
     results = s3.get_object(Bucket=airfire_exports_bucket(), Key=config.HMS_SMOKE_S3_KEY)
@@ -28,6 +38,7 @@ def extract():
     return features
 
 
+@task
 def transform(data):
     """
     HMS Data is in CRS84 and not EPSG:4326, which is essentially EPSG:4326
@@ -70,6 +81,7 @@ def truncate():
     logger.info(f"Truncated {table} table")
 
 
+@task
 def load(gdf):
     table = config.qualified(config.HMS_SMOKE_TABLE)
     engine = get_ts_engine()

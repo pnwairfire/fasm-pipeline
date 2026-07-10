@@ -1,4 +1,13 @@
 """PurpleAir sensors ingest -> pwfsl_map.purple_air."""
+
+try:
+    from prefect import task
+except ImportError:
+    def task(fn=None, **kwargs):
+        if fn is None:
+            return lambda f: f
+        return fn
+
 import logging
 
 import numpy as np
@@ -14,6 +23,7 @@ from fasm_pipeline.time_util import add_latency, add_status
 logger = logging.getLogger(__name__)
 
 
+@task
 def extract():
     s3 = init_s3()
     results = s3.get_object(Bucket=airfire_exports_bucket(), Key=config.PURPLE_AIR_S3_KEY)
@@ -22,6 +32,7 @@ def extract():
     return df
 
 
+@task
 def process(df):
     df = df.replace({np.nan: None})
     df["aqi"] = df["epa_nowcast"].apply(pm25_to_aqi)
@@ -33,6 +44,7 @@ def process(df):
     return df
 
 
+@task
 def load(df):
     table = config.qualified(config.PURPLE_AIR_TABLE)
     conn = get_ts_db_conn()
