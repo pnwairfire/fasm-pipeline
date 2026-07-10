@@ -1,0 +1,82 @@
+name: "CI/CD Build & Push to ECR"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "fasm_pipeline/**"
+      - "docker/**"
+      - "requirements.txt"
+      - "pyproject.toml"
+      - ".github/workflows/ecr-publish.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: "Lint & Test"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          uv sync --group dev
+          if [ -f requirements.txt ]; then
+            uv pip install -r requirements.txt
+          fi
+          uv pip install -e .
+
+      - name: Run Ruff Format Check
+        run: uv run --group dev ruff format --check .
+
+      - name: Run Ruff Lint Check
+        run: uv run --group dev ruff check .
+
+      - name: Run Tests
+        run: uv run pytest
+
+  build-and-push:
+    name: "Build & Push ECR"
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME || vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-west-2
+          audience: sts.amazonaws.com
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push fasm-pipeline Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+          REPOSITORY: "prefect-af-fasm-pipeline"
+        run: |
+          docker build \
+            -f docker/Dockerfile \
+            -t $ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$REPOSITORY:latest \
+            .
+          
+          docker push $ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$REPOSITORY:latest

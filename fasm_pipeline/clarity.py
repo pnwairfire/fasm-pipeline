@@ -1,4 +1,7 @@
 """Clarity sensors ingest -> pwfsl_map.clarity_sensors."""
+
+
+
 import json
 import logging
 
@@ -20,6 +23,7 @@ NORM_COLS = [
 ]
 
 
+
 def extract():
     s3 = init_s3()
     results = s3.get_object(Bucket=airfire_exports_bucket(), Key=config.CLARITY_S3_KEY)
@@ -27,6 +31,7 @@ def extract():
     df = pd.json_normalize(json_data["features"])
     logger.info(f"EXTRACTED {len(df)} Clarity sensor records from S3")
     return df
+
 
 
 def normalize(df):
@@ -43,6 +48,7 @@ def normalize(df):
     return norm_df
 
 
+
 def process(df):
     df.raw_pm25 = df.raw_pm25.astype(float).clip(lower=0)
     df.nowcast = df.nowcast.astype(float).clip(lower=0)
@@ -55,6 +61,7 @@ def process(df):
     df = add_status(df)
     logger.info(f"TRANSFORMED {len(df)} records with AQI, latency, and status")
     return df
+
 
 
 def load(df):

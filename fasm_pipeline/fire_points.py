@@ -1,4 +1,7 @@
 """FASM fire points ingest -> pwfsl_map.fasm_fire_points."""
+
+
+
 import logging
 
 import pandas as pd
@@ -18,6 +21,7 @@ QUERY_COLUMNS = [
 ]
 
 
+
 def extract():
     query_sql = read_sql("query_fasm_fire_points.sql").replace("\n", " ")
 
@@ -30,6 +34,7 @@ def extract():
 
     logger.info(f"EXTRACTED {len(result)} points from fire database")
     return result
+
 
 
 def transform(result):
@@ -50,6 +55,7 @@ def transform(result):
 
     logger.info(f"TRANSFORMED {len(df)} fire points")
     return df
+
 
 
 def load(df):

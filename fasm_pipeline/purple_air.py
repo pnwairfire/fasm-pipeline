@@ -1,4 +1,7 @@
 """PurpleAir sensors ingest -> pwfsl_map.purple_air."""
+
+
+
 import logging
 
 import numpy as np
@@ -14,12 +17,14 @@ from fasm_pipeline.time_util import add_latency, add_status
 logger = logging.getLogger(__name__)
 
 
+
 def extract():
     s3 = init_s3()
     results = s3.get_object(Bucket=airfire_exports_bucket(), Key=config.PURPLE_AIR_S3_KEY)
     df = pd.read_csv(results["Body"])
     logger.info(f"Retrieved {len(df)} PurpleAir records from S3")
     return df
+
 
 
 def process(df):
@@ -31,6 +36,7 @@ def process(df):
     df = add_status(df)
     logger.info(f"Processed {len(df)} records with AQI, latency, and status")
     return df
+
 
 
 def load(df):

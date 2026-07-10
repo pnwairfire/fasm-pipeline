@@ -1,4 +1,7 @@
 """Historical fire detects grid ingest -> pwfsl_map.fire_detects_historical_grid."""
+
+
+
 import logging
 
 import geopandas as gpd
@@ -9,6 +12,7 @@ from fasm_pipeline.db import get_airfire_engine, get_ts_db_conn, get_ts_engine
 from fasm_pipeline.sql_util import read_sql
 
 logger = logging.getLogger(__name__)
+
 
 
 def extract():
@@ -41,6 +45,7 @@ def truncate():
         conn.close()
 
     logger.info(f"TRUNCATED {table}")
+
 
 
 def load(gdf):

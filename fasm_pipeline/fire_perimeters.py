@@ -1,4 +1,7 @@
 """FASM fire perimeters ingest -> pwfsl_map.fasm_fire_perimeters."""
+
+
+
 import logging
 
 import geopandas as gpd
@@ -11,6 +14,7 @@ from fasm_pipeline.db import get_airfire_engine, get_ts_db_conn, get_ts_engine
 from fasm_pipeline.sql_util import read_sql
 
 logger = logging.getLogger(__name__)
+
 
 
 def extract():
@@ -39,6 +43,7 @@ def _convert_to_multipolygon(gdf):
     return gdf
 
 
+
 def transform(gdf):
     gdf = gdf.dissolve(by="fasm_fire_id", aggfunc="max")
     gdf = gdf.sort_values("cumulative_acres", ascending=False).drop_duplicates("incident_name").sort_index()
@@ -48,6 +53,7 @@ def transform(gdf):
     gdf.reset_index(drop=True, inplace=True)
     logger.info(f"TRANSFORMED {len(gdf)} perimeters after dissolve and deduplication")
     return gdf
+
 
 
 def load(gdf):

@@ -1,4 +1,7 @@
 """Smoke outlooks ingest -> pwfsl_map.outlooks (+ legacy S3 GeoJSON publish)."""
+
+
+
 import json
 import logging
 
@@ -46,6 +49,7 @@ def write_geojson_to_s3(geojson):
     logger.info(f"WROTE {len(geojson['features'])} outlooks to s3://.../{config.OUTLOOKS_OUTPUT_S3_KEY}")
 
 
+
 def transform(data):
     parsed_data = [[
         item["properties"]["outlook_path"],
@@ -88,6 +92,7 @@ def truncate():
         conn.close()
 
     logger.info(f"TRUNCATED {table}")
+
 
 
 def load(gdf):

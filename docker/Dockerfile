@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.12-slim
 WORKDIR /app
 
 # PYTHONPATH lets `from fasm_pipeline import ...` and `python -m fasm_pipeline`

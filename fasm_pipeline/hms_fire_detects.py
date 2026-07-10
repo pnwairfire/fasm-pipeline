@@ -1,4 +1,7 @@
 """HMS fire detects ingest -> pwfsl_map.fire_detects."""
+
+
+
 import json
 import logging
 from datetime import datetime, timedelta
@@ -22,6 +25,7 @@ def parse_hms_datetime(yearday, time):
     date = date + timedelta(hours=hour)
     date = date + timedelta(minutes=minute)
     return date
+
 
 
 def extract():
@@ -52,6 +56,7 @@ def extract():
     return data
 
 
+
 def transform(data):
     # Pull records from the data
     payload = [i["properties"] for i in data]
@@ -80,6 +85,7 @@ def transform(data):
 
     logger.info(f"TRANSFORMED {len(norm_df)} fire detects after deduplication")
     return norm_df
+
 
 
 def load(df):

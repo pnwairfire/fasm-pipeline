@@ -1,4 +1,7 @@
 """Historical AQ snapshot sync — runs a set of SQL files against the TS DB."""
+
+
+
 import logging
 
 from fasm_pipeline.db import get_ts_db_conn
@@ -26,10 +29,12 @@ def run_sql_file(name: str) -> int:
     return rowcount
 
 
+
 def sync_purple_air():
     rowcount = run_sql_file("historical_purple_air.sql")
     logger.info(f"SYNCED purple_air: {rowcount} rows affected")
     return f"💜 purple_air: {rowcount} rows"
+
 
 
 def sync_permanent_monitors():
@@ -38,16 +43,19 @@ def sync_permanent_monitors():
     return f"🏛️ permanent_monitors: {rowcount} rows"
 
 
+
 def sync_airnow_sensors():
     rowcount = run_sql_file("historical_airnow_sensors.sql")
     logger.info(f"SYNCED airnow_sensors: {rowcount} rows affected")
     return f"📡 airnow_sensors: {rowcount} rows"
 
 
+
 def sync_clarity_sensors():
     rowcount = run_sql_file("historical_clarity_sensors.sql")
     logger.info(f"SYNCED clarity_sensors: {rowcount} rows affected")
     return f"🌫️ clarity_sensors: {rowcount} rows"
+
 
 
 def sync_mobile_monitors():
