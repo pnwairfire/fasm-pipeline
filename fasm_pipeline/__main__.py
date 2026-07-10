@@ -7,6 +7,7 @@ This is the interface an orchestrator invokes. It is deliberately
 Prefect-agnostic — Prefect (or cron, or a bare `docker run`) launches this and
 reads the logs; nothing here knows about work pools or deployments.
 """
+
 import argparse
 import logging
 import sys
@@ -48,7 +49,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="fasm-pipeline", description=__doc__)
     parser.add_argument("stream", choices=sorted(REGISTRY), help="which pipeline to run")
     parser.add_argument(
-        "--log-level", default="INFO",
+        "--log-level",
+        default="INFO",
         help="stdlib logging level (default: INFO)",
     )
     args = parser.parse_args(argv)

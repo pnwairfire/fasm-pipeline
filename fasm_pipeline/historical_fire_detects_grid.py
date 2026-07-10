@@ -1,7 +1,5 @@
 """Historical fire detects grid ingest -> pwfsl_map.fire_detects_historical_grid."""
 
-
-
 import logging
 
 import geopandas as gpd
@@ -12,7 +10,6 @@ from fasm_pipeline.db import get_airfire_engine, get_ts_db_conn, get_ts_engine
 from fasm_pipeline.sql_util import read_sql
 
 logger = logging.getLogger(__name__)
-
 
 
 def extract():
@@ -47,11 +44,15 @@ def truncate():
     logger.info(f"TRUNCATED {table}")
 
 
-
 def load(gdf):
     table = config.qualified(config.FIRE_DETECTS_GRID_TABLE)
     engine = get_ts_engine()
-    gdf.to_postgis(config.FIRE_DETECTS_GRID_TABLE, engine, schema=config.DEST_SCHEMA, if_exists="append")
+    gdf.to_postgis(
+        config.FIRE_DETECTS_GRID_TABLE,
+        engine,
+        schema=config.DEST_SCHEMA,
+        if_exists="append",
+    )
     logger.info(f"LOADED {len(gdf)} grid-cells to {table}")
     return f"Loaded {len(gdf)} historical fire detect grid-cells successfully"
 

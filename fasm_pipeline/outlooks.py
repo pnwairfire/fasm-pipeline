@@ -1,7 +1,5 @@
 """Smoke outlooks ingest -> pwfsl_map.outlooks (+ legacy S3 GeoJSON publish)."""
 
-
-
 import json
 import logging
 
@@ -49,20 +47,29 @@ def write_geojson_to_s3(geojson):
     logger.info(f"WROTE {len(geojson['features'])} outlooks to s3://.../{config.OUTLOOKS_OUTPUT_S3_KEY}")
 
 
-
 def transform(data):
-    parsed_data = [[
-        item["properties"]["outlook_path"],
-        item["properties"]["forecast_date"],
-        item["properties"]["author"],
-        item["properties"]["region_title"],
-        item["properties"]["create_date_utc"],
-        shape(item["geometry"]),
-    ] for item in data]
+    parsed_data = [
+        [
+            item["properties"]["outlook_path"],
+            item["properties"]["forecast_date"],
+            item["properties"]["author"],
+            item["properties"]["region_title"],
+            item["properties"]["create_date_utc"],
+            shape(item["geometry"]),
+        ]
+        for item in data
+    ]
 
     gdf = gpd.GeoDataFrame(
         data=parsed_data,
-        columns=["outlook_path", "forecast_date_str", "author", "region_title", "create_date_utc", "geom"],
+        columns=[
+            "outlook_path",
+            "forecast_date_str",
+            "author",
+            "region_title",
+            "create_date_utc",
+            "geom",
+        ],
     )
     gdf = gdf.set_geometry("geom")
     gdf.geom = gdf.geom.set_crs(epsg=4326)
@@ -92,7 +99,6 @@ def truncate():
         conn.close()
 
     logger.info(f"TRUNCATED {table}")
-
 
 
 def load(gdf):

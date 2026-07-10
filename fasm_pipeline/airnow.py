@@ -1,7 +1,5 @@
 """AirNow permanent monitors ingest -> pwfsl_map.airnow_monitors."""
 
-
-
 import json
 import logging
 
@@ -18,11 +16,20 @@ from fasm_pipeline.time_util import add_latency, add_status, offset_hour
 logger = logging.getLogger(__name__)
 
 NORM_COLS = [
-    "unit_id", "latitude", "longitude", "utc_ts", "timezone",
-    "raw_pm25", "nowcast", "site_name", "deployment_type",
-    "device_type", "instrument", "aqsid", "full_aqsid",
+    "unit_id",
+    "latitude",
+    "longitude",
+    "utc_ts",
+    "timezone",
+    "raw_pm25",
+    "nowcast",
+    "site_name",
+    "deployment_type",
+    "device_type",
+    "instrument",
+    "aqsid",
+    "full_aqsid",
 ]
-
 
 
 def extract():
@@ -32,7 +39,6 @@ def extract():
     df = pd.json_normalize(json_data["features"])
     logger.info(f"EXTRACTED {len(df)} AirNow monitor records from S3")
     return df
-
 
 
 def normalize(df):
@@ -54,7 +60,6 @@ def normalize(df):
     return norm_df
 
 
-
 def process(df):
     df.raw_pm25 = df.raw_pm25.astype(float).clip(lower=0)
     df.nowcast = df.nowcast.astype(float).clip(lower=0)
@@ -67,7 +72,6 @@ def process(df):
     df = add_status(df)
     logger.info(f"TRANSFORMED {len(df)} records with AQI, latency, and status")
     return df
-
 
 
 def load(df):

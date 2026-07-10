@@ -4,6 +4,7 @@ Resolving relative to this module (rather than the process CWD) means the
 queries load correctly whether the pipeline runs from a repo checkout, an
 installed package, or a Docker image.
 """
+
 from pathlib import Path
 
 SQL_DIR = Path(__file__).parent / "sql"

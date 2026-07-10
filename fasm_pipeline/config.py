@@ -10,6 +10,7 @@ Buckets, credentials, and S3 endpoints live in ``s3.py``; DB credentials live
 in ``db.py``. This module covers object KEYS, table names, and schemas — the
 "where data comes from / goes to" that operators tend to change.
 """
+
 import os
 import re
 
@@ -43,13 +44,16 @@ def qualified(table: str) -> str:
 
 
 # --- Schemas ---
-DEST_SCHEMA = _ident("DEST_SCHEMA", "pwfsl_map")          # all streams write here
-FIRE_SCHEMA = _ident("FIRE_SCHEMA", "fire_info")          # fire source (AirFire DB)
-OUTLOOK_SCHEMA = _ident("OUTLOOK_SCHEMA", "outlook_v7")   # outlook source
+DEST_SCHEMA = _ident("DEST_SCHEMA", "pwfsl_map")  # all streams write here
+FIRE_SCHEMA = _ident("FIRE_SCHEMA", "fire_info")  # fire source (AirFire DB)
+OUTLOOK_SCHEMA = _ident("OUTLOOK_SCHEMA", "outlook_v7")  # outlook source
 
 # --- S3 source object keys ---
 AIRNOW_S3_KEY = _env("AIRNOW_S3_KEY", "monitoring/v2/latest/geojson/fasm_airnow_PM2.5_latest.geojson")
-CLARITY_S3_KEY = _env("CLARITY_S3_KEY", "sensors/v3/PM2.5/latest/geojson/fasm_clarity_PM2.5_latest.geojson")
+CLARITY_S3_KEY = _env(
+    "CLARITY_S3_KEY",
+    "sensors/v3/PM2.5/latest/geojson/fasm_clarity_PM2.5_latest.geojson",
+)
 AIRSIS_S3_KEY = _env("AIRSIS_S3_KEY", "monitoring/v2/latest/geojson/fasm_airsis_PM2.5_latest.geojson")
 WRCC_S3_KEY = _env("WRCC_S3_KEY", "monitoring/v2/latest/geojson/fasm_wrcc_PM2.5_latest.geojson")
 PURPLE_AIR_S3_KEY = _env("PURPLE_AIR_S3_KEY", "maps/purple_air/v4/pas.csv")
