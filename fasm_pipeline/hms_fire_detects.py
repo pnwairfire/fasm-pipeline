@@ -18,8 +18,9 @@ NORM_COLS = ["latitude", "longitude", "utc_ts", "frp", "source", "satellite"]
 
 def parse_hms_datetime(yearday, time):
     date = datetime.strptime(str(yearday), "%Y%j")
-    hour = int((time / 100) // 1)
-    minute = time % 100
+    time_num = float(time)
+    hour = int((time_num / 100) // 1)
+    minute = int(time_num % 100)
     date = date + timedelta(hours=hour)
     date = date + timedelta(minutes=minute)
     return date

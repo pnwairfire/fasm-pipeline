@@ -5,10 +5,12 @@ WORKDIR /app
 # resolve without an editable install.
 ENV PYTHONPATH=/app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install uv from official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+COPY pyproject.toml .
 COPY fasm_pipeline/ fasm_pipeline/
+RUN uv pip install --system --no-cache .
 
 # The container runs one pipeline and logs to stdout, e.g.:
 #   docker run --rm --env-file .env fasm-pipeline:latest airnow
