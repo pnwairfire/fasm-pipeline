@@ -70,13 +70,14 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
+          ENV_TAG: ${{ github.ref_type == 'tag' && 'prod' || 'dev' }}
           REPOSITORY: "prefect-af-fasm-pipeline"
         run: |
           docker build \
             -f docker/Dockerfile \
             -t $ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG \
-            -t $ECR_REGISTRY/$REPOSITORY:latest \
+            -t $ECR_REGISTRY/$REPOSITORY:$ENV_TAG \
             .
           
           docker push $ECR_REGISTRY/$REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$REPOSITORY:latest
+          docker push $ECR_REGISTRY/$REPOSITORY:$ENV_TAG
