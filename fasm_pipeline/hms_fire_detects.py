@@ -55,30 +55,47 @@ def extract():
 
 
 def transform(data):
-    # Pull records from the data
-    payload = [i["properties"] for i in data]
-    raw_df = pd.DataFrame.from_dict(payload, orient="columns")
+    if not data:
+        logger.info("No fire detect records returned from extract; returning empty DataFrame.")
+        return pd.DataFrame(columns=NORM_COLS)
 
-    # Create normalized dataframe
+    # Pull records from the data
+    payload = [i.get("properties", {}) for i in data]
+    if not payload:
+        logger.info("Features contained no properties; returning empty DataFrame.")
+        return pd.DataFrame(columns=NORM_COLS)
+
+    raw_df = pd.DataFrame.from_dict(payload, orient="columns")
+    if raw_df.empty:
+        logger.info("DataFrame created from payload is empty; returning empty DataFrame.")
+        return pd.DataFrame(columns=NORM_COLS)
+
+    # Create normalized dataframe with safe column access
     norm_df = pd.DataFrame(columns=NORM_COLS)
-    norm_df.latitude = raw_df.Lat
-    norm_df.longitude = raw_df.Lon
-    norm_df.utc_ts = raw_df.apply(lambda x: parse_hms_datetime(x.YearDay, x.Time), axis=1)
-    norm_df.frp = raw_df.FRP
-    norm_df.source = raw_df.Source
-    norm_df.satellite = raw_df.Satellite
+    norm_df["latitude"] = raw_df["Lat"] if "Lat" in raw_df.columns else pd.Series(dtype="float64")
+    norm_df["longitude"] = raw_df["Lon"] if "Lon" in raw_df.columns else pd.Series(dtype="float64")
+
+    if "YearDay" in raw_df.columns and "Time" in raw_df.columns:
+        norm_df["utc_ts"] = raw_df.apply(lambda x: parse_hms_datetime(x.YearDay, x.Time), axis=1)
+    else:
+        norm_df["utc_ts"] = pd.Series(dtype="datetime64[ns]")
+
+    norm_df["frp"] = raw_df["FRP"] if "FRP" in raw_df.columns else 0
+    norm_df["source"] = raw_df["Source"] if "Source" in raw_df.columns else "Unknown"
+    norm_df["satellite"] = raw_df["Satellite"] if "Satellite" in raw_df.columns else "Unknown"
 
     # Detects manually input (source: Analysis) default to FRP of -999, raise to 1
-    norm_df.loc[norm_df.frp < -1, "frp"] = 1
-    norm_df.frp = norm_df.frp.round(2)
+    norm_df.loc[norm_df["frp"] < -1, "frp"] = 1
+    norm_df["frp"] = norm_df["frp"].round(2)
 
     # Round lat/long to 4 decimal places (~4m precision)
-    norm_df.latitude = norm_df.latitude.round(4)
-    norm_df.longitude = norm_df.longitude.round(4)
+    norm_df["latitude"] = norm_df["latitude"].round(4)
+    norm_df["longitude"] = norm_df["longitude"].round(4)
 
     # Remove duplicate points, keeping most recent
-    norm_df.sort_values("utc_ts", ascending=True)
-    norm_df = norm_df.drop_duplicates(subset=["latitude", "longitude"], keep="last")
+    if not norm_df.empty and "utc_ts" in norm_df.columns:
+        norm_df = norm_df.sort_values("utc_ts", ascending=True)
+        norm_df = norm_df.drop_duplicates(subset=["latitude", "longitude"], keep="last")
 
     logger.info(f"TRANSFORMED {len(norm_df)} fire detects after deduplication")
     return norm_df
