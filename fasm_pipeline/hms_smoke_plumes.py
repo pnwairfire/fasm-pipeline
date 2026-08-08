@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import geopandas as gpd
 from shapely.geometry import shape
@@ -71,6 +71,24 @@ def truncate():
     logger.info(f"Truncated {table} table")
 
 
+def get_existing_table_metadata():
+    """Query existing pwfsl_map.hms_smoke_plume table for row count and latest end_utc."""
+    table = config.qualified(config.HMS_SMOKE_TABLE)
+    conn = get_ts_db_conn()
+    try:
+        with conn.cursor() as c:
+            c.execute(f"SELECT COUNT(*), MAX(end_utc) FROM {table};")
+            row = c.fetchone()
+            count = row[0] if row else 0
+            max_end = row[1] if row else None
+            return count, max_end
+    except Exception as e:
+        logger.warning(f"Could not query existing table metadata: {e}")
+        return 0, None
+    finally:
+        conn.close()
+
+
 def load(gdf):
     table = config.qualified(config.HMS_SMOKE_TABLE)
     engine = get_ts_engine()
@@ -79,17 +97,27 @@ def load(gdf):
     return f"💨 Loaded {len(gdf)} HMS smoke plume features successfully 💨"
 
 
-def write_status_to_s3(gdf):
+def write_status_to_s3(last_scan_dt, is_fallback=False, display_date=None, features=0):
     last_checked = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    if len(gdf) > 0:
-        last_scan = gdf["end_utc"].max().strftime("%Y-%m-%dT%H:%M:%SZ")
+    if last_scan_dt:
+        if isinstance(last_scan_dt, str):
+            last_scan_str = last_scan_dt
+            if not display_date and "T" in last_scan_dt:
+                display_date = last_scan_dt.split("T")[0]
+        else:
+            last_scan_str = last_scan_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            if not display_date:
+                display_date = last_scan_dt.strftime("%Y-%m-%d")
     else:
-        last_scan = None
+        last_scan_str = None
 
     status = {
         "last_checked": last_checked,
-        "last_scan": last_scan,
+        "last_scan": last_scan_str,
+        "display_date": display_date,
+        "is_fallback": is_fallback,
+        "features": features,
     }
 
     s3 = init_epa_s3()
@@ -100,14 +128,61 @@ def write_status_to_s3(gdf):
         ContentType="application/json",
         ACL="public-read",
     )
-    logger.info(f"Wrote hms_status.json — last_checked: {last_checked}, last_scan: {last_scan}")
+    logger.info(
+        f"Wrote hms_status.json — last_checked: {last_checked}, last_scan: {last_scan_str}, "
+        f"display_date: {display_date}, is_fallback: {is_fallback}, features: {features}"
+    )
 
 
-def run():
+def run(max_fallback_hours=6):
     """Run the full HMS smoke plumes ingest end-to-end. Returns a summary string."""
     data = extract()
     gdf = transform(data)
-    truncate()
-    msg = load(gdf)
-    write_status_to_s3(gdf)
-    return msg
+
+    if len(gdf) > 0:
+        truncate()
+        msg = load(gdf)
+        max_end = gdf["end_utc"].max() if "end_utc" in gdf.columns and gdf["end_utc"].notna().any() else None
+        write_status_to_s3(
+            last_scan_dt=max_end,
+            is_fallback=False,
+            display_date=max_end.strftime("%Y-%m-%d") if max_end else None,
+            features=len(gdf),
+        )
+        return msg
+    else:
+        existing_count, max_end_utc = get_existing_table_metadata()
+        now_utc = datetime.now(timezone.utc)
+
+        if existing_count > 0 and max_end_utc:
+            if max_end_utc.tzinfo is None:
+                max_end_utc = max_end_utc.replace(tzinfo=timezone.utc)
+
+            age = now_utc - max_end_utc
+            if age <= timedelta(hours=max_fallback_hours):
+                logger.info(
+                    f"0 new features in latest_smoke.geojson. Retaining {existing_count} existing features "
+                    f"from {max_end_utc.isoformat()} (age: {age.total_seconds() / 3600:.1f}h <= {max_fallback_hours}h limit)"
+                )
+                write_status_to_s3(
+                    last_scan_dt=max_end_utc,
+                    is_fallback=True,
+                    display_date=max_end_utc.strftime("%Y-%m-%d"),
+                    features=existing_count,
+                )
+                return (
+                    f"💨 0 features from NOAA; retained {existing_count} fallback HMS smoke plume "
+                    f"features from {max_end_utc.strftime('%Y-%m-%d')} 💨"
+                )
+
+        logger.info(
+            f"0 features in latest_smoke.geojson and no valid fallback data within {max_fallback_hours}h. Truncating table."
+        )
+        truncate()
+        write_status_to_s3(
+            last_scan_dt=None,
+            is_fallback=False,
+            display_date=None,
+            features=0,
+        )
+        return "💨 0 features from NOAA; cleared HMS smoke plume table 💨"
