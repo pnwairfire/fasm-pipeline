@@ -121,13 +121,15 @@ def write_status_to_s3(last_scan_dt, is_fallback=False, display_date=None, featu
     }
 
     s3 = init_epa_s3()
-    s3.put_object(
-        Bucket=fasm_layers_bucket(),
-        Key=config.HMS_STATUS_S3_KEY,
-        Body=json.dumps(status),
-        ContentType="application/json",
-        ACL="public-read",
-    )
+    try:
+        s3.put_object(
+            Bucket=fasm_layers_bucket(),
+            Key=config.HMS_STATUS_S3_KEY,
+            Body=json.dumps(status),
+            ContentType="application/json",
+        )
+    except Exception as e:
+        logger.warning(f"Could not write hms_status.json to S3: {e}")
     logger.info(
         f"Wrote hms_status.json — last_checked: {last_checked}, last_scan: {last_scan_str}, "
         f"display_date: {display_date}, is_fallback: {is_fallback}, features: {features}"
