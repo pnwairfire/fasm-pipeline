@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import geopandas as gpd
 from shapely.geometry import shape
@@ -97,7 +97,24 @@ def load(gdf):
     return f"💨 Loaded {len(gdf)} HMS smoke plume features successfully 💨"
 
 
-def write_status_to_s3(last_scan_dt, is_fallback=False, display_date=None, features=0):
+def read_status_from_s3():
+    """Read existing hms_status.json from S3 to retrieve state like consecutive_empty_scans."""
+    s3 = init_epa_s3()
+    try:
+        results = s3.get_object(Bucket=fasm_layers_bucket(), Key=config.HMS_STATUS_S3_KEY)
+        return json.loads(results["Body"].read())
+    except Exception as e:
+        logger.warning(f"Could not read existing hms_status.json from S3: {e}")
+        return {}
+
+
+def write_status_to_s3(
+    last_scan_dt,
+    is_fallback=False,
+    display_date=None,
+    features=0,
+    consecutive_empty_scans=0,
+):
     last_checked = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     if last_scan_dt:
@@ -118,6 +135,7 @@ def write_status_to_s3(last_scan_dt, is_fallback=False, display_date=None, featu
         "display_date": display_date,
         "is_fallback": is_fallback,
         "features": features,
+        "consecutive_empty_scans": consecutive_empty_scans,
     }
 
     s3 = init_epa_s3()
@@ -132,12 +150,26 @@ def write_status_to_s3(last_scan_dt, is_fallback=False, display_date=None, featu
         logger.warning(f"Could not write hms_status.json to S3: {e}")
     logger.info(
         f"Wrote hms_status.json — last_checked: {last_checked}, last_scan: {last_scan_str}, "
-        f"display_date: {display_date}, is_fallback: {is_fallback}, features: {features}"
+        f"display_date: {display_date}, is_fallback: {is_fallback}, features: {features}, "
+        f"consecutive_empty_scans: {consecutive_empty_scans}"
     )
 
 
-def run(max_fallback_hours=6):
-    """Run the full HMS smoke plumes ingest end-to-end. Returns a summary string."""
+def run(max_empty_scans=3):
+    """Run the full HMS smoke plumes ingest end-to-end. Returns a summary string.
+
+    Strategy:
+    1. If new non-empty features arrive (len(gdf) > 0):
+       - Immediately TRUNCATE existing table and load fresh features.
+       - Reset consecutive_empty_scans to 0.
+    2. If empty response arrives (len(gdf) == 0):
+       - Increment consecutive_empty_scans count.
+       - If consecutive_empty_scans < max_empty_scans:
+           Retain active features from previous run (do NOT truncate yet), allowing
+           circumstantial early morning missing data to persist briefly.
+       - If consecutive_empty_scans >= max_empty_scans:
+           TRUNCATE table, indicating that the lack of data is intentional (plumes gone).
+    """
     data = extract()
     gdf = transform(data)
 
@@ -150,41 +182,43 @@ def run(max_fallback_hours=6):
             is_fallback=False,
             display_date=max_end.strftime("%Y-%m-%d") if max_end else None,
             features=len(gdf),
+            consecutive_empty_scans=0,
         )
         return msg
     else:
+        status_data = read_status_from_s3()
+        prev_empty = status_data.get("consecutive_empty_scans", 0)
+        curr_empty = prev_empty + 1
+
         existing_count, max_end_utc = get_existing_table_metadata()
-        now_utc = datetime.now(timezone.utc)
 
-        if existing_count > 0 and max_end_utc:
-            if max_end_utc.tzinfo is None:
-                max_end_utc = max_end_utc.replace(tzinfo=timezone.utc)
-
-            age = now_utc - max_end_utc
-            if age <= timedelta(hours=max_fallback_hours):
-                logger.info(
-                    f"0 new features in latest_smoke.geojson. Retaining {existing_count} existing features "
-                    f"from {max_end_utc.isoformat()} (age: {age.total_seconds() / 3600:.1f}h <= {max_fallback_hours}h limit)"
-                )
-                write_status_to_s3(
-                    last_scan_dt=max_end_utc,
-                    is_fallback=True,
-                    display_date=max_end_utc.strftime("%Y-%m-%d"),
-                    features=existing_count,
-                )
-                return (
-                    f"💨 0 features from NOAA; retained {existing_count} fallback HMS smoke plume "
-                    f"features from {max_end_utc.strftime('%Y-%m-%d')} 💨"
-                )
-
-        logger.info(
-            f"0 features in latest_smoke.geojson and no valid fallback data within {max_fallback_hours}h. Truncating table."
-        )
-        truncate()
-        write_status_to_s3(
-            last_scan_dt=None,
-            is_fallback=False,
-            display_date=None,
-            features=0,
-        )
-        return "💨 0 features from NOAA; cleared HMS smoke plume table 💨"
+        if curr_empty < max_empty_scans and existing_count > 0:
+            logger.info(
+                f"0 features in latest_smoke.geojson (consecutive empty scan {curr_empty}/{max_empty_scans}). "
+                f"Retaining {existing_count} existing active features."
+            )
+            write_status_to_s3(
+                last_scan_dt=max_end_utc,
+                is_fallback=True,
+                display_date=max_end_utc.strftime("%Y-%m-%d") if max_end_utc else None,
+                features=existing_count,
+                consecutive_empty_scans=curr_empty,
+            )
+            return (
+                f"💨 0 features from NOAA (scan {curr_empty}/{max_empty_scans}); "
+                f"retained {existing_count} existing HMS smoke plume features 💨"
+            )
+        else:
+            logger.info(
+                f"0 features in latest_smoke.geojson for {curr_empty} consecutive scan(s) "
+                f"(>= {max_empty_scans} limit). Truncating table to clear old plume data."
+            )
+            truncate()
+            write_status_to_s3(
+                last_scan_dt=None,
+                is_fallback=False,
+                display_date=None,
+                features=0,
+                consecutive_empty_scans=curr_empty,
+            )
+            return f"💨 0 features from NOAA for {curr_empty} consecutive scan(s); truncated HMS smoke plume table 💨"
