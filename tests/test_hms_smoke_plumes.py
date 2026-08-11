@@ -8,6 +8,14 @@ from shapely.geometry import Polygon
 from fasm_pipeline import hms_smoke_plumes
 
 
+def test_is_overnight_lull():
+    overnight_dt = datetime(2026, 8, 10, 8, 0, tzinfo=timezone.utc)
+    daytime_dt = datetime(2026, 8, 10, 18, 0, tzinfo=timezone.utc)
+
+    assert hms_smoke_plumes.is_overnight_lull(overnight_dt) is True
+    assert hms_smoke_plumes.is_overnight_lull(daytime_dt) is False
+
+
 def test_write_status_to_s3_active():
     with patch("fasm_pipeline.hms_smoke_plumes.init_epa_s3") as mock_s3:
         mock_client = MagicMock()
@@ -92,6 +100,33 @@ def test_run_with_features():
         assert res == "OK"
 
 
+def test_run_zero_features_overnight_lull():
+    empty_gdf = gpd.GeoDataFrame(columns=["satellite", "density", "start_utc", "end_utc", "geom"])
+    last_valid_end = datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc)
+    overnight_now = datetime(2026, 8, 8, 8, 0, tzinfo=timezone.utc)
+
+    with (
+        patch("fasm_pipeline.hms_smoke_plumes.extract", return_value=[]),
+        patch("fasm_pipeline.hms_smoke_plumes.transform", return_value=empty_gdf),
+        patch("fasm_pipeline.hms_smoke_plumes.get_existing_table_metadata", return_value=(25, last_valid_end)),
+        patch("fasm_pipeline.hms_smoke_plumes.is_overnight_lull", return_value=True),
+        patch("fasm_pipeline.hms_smoke_plumes.truncate") as mock_truncate,
+        patch("fasm_pipeline.hms_smoke_plumes.write_status_to_s3") as mock_write_status,
+    ):
+        res = hms_smoke_plumes.run(max_empty_scans=3)
+
+        mock_truncate.assert_not_called()
+        mock_write_status.assert_called_once_with(
+            last_scan_dt=last_valid_end,
+            is_fallback=True,
+            display_date="2026-08-07",
+            features=25,
+            consecutive_empty_scans=0,
+        )
+        assert "overnight lull" in res
+        assert "retained 25 existing HMS smoke plume features" in res
+
+
 def test_run_zero_features_below_threshold():
     empty_gdf = gpd.GeoDataFrame(columns=["satellite", "density", "start_utc", "end_utc", "geom"])
     last_valid_end = datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc)
@@ -99,6 +134,7 @@ def test_run_zero_features_below_threshold():
     with (
         patch("fasm_pipeline.hms_smoke_plumes.extract", return_value=[]),
         patch("fasm_pipeline.hms_smoke_plumes.transform", return_value=empty_gdf),
+        patch("fasm_pipeline.hms_smoke_plumes.is_overnight_lull", return_value=False),
         patch("fasm_pipeline.hms_smoke_plumes.read_status_from_s3", return_value={"consecutive_empty_scans": 0}),
         patch("fasm_pipeline.hms_smoke_plumes.get_existing_table_metadata", return_value=(25, last_valid_end)),
         patch("fasm_pipeline.hms_smoke_plumes.truncate") as mock_truncate,
@@ -126,6 +162,7 @@ def test_run_zero_features_at_threshold():
     with (
         patch("fasm_pipeline.hms_smoke_plumes.extract", return_value=[]),
         patch("fasm_pipeline.hms_smoke_plumes.transform", return_value=empty_gdf),
+        patch("fasm_pipeline.hms_smoke_plumes.is_overnight_lull", return_value=False),
         patch("fasm_pipeline.hms_smoke_plumes.read_status_from_s3", return_value={"consecutive_empty_scans": 2}),
         patch("fasm_pipeline.hms_smoke_plumes.get_existing_table_metadata", return_value=(25, last_valid_end)),
         patch("fasm_pipeline.hms_smoke_plumes.truncate") as mock_truncate,

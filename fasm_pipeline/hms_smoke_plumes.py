@@ -155,7 +155,18 @@ def write_status_to_s3(
     )
 
 
-def run(max_empty_scans=3):
+def is_overnight_lull(now_dt=None, lull_start_hour=2, lull_end_hour=16):
+    """Check if current UTC time falls within the overnight/early-morning satellite lull window (02:00 - 16:00 UTC)."""
+    if now_dt is None:
+        now_dt = datetime.now(timezone.utc)
+    hour = now_dt.hour
+    if lull_start_hour <= lull_end_hour:
+        return lull_start_hour <= hour < lull_end_hour
+    else:
+        return hour >= lull_start_hour or hour < lull_end_hour
+
+
+def run(max_empty_scans=3, lull_start_hour=2, lull_end_hour=16):
     """Run the full HMS smoke plumes ingest end-to-end. Returns a summary string.
 
     Strategy:
@@ -163,12 +174,11 @@ def run(max_empty_scans=3):
        - Immediately TRUNCATE existing table and load fresh features.
        - Reset consecutive_empty_scans to 0.
     2. If empty response arrives (len(gdf) == 0):
-       - Increment consecutive_empty_scans count.
-       - If consecutive_empty_scans < max_empty_scans:
-           Retain active features from previous run (do NOT truncate yet), allowing
-           circumstantial early morning missing data to persist briefly.
-       - If consecutive_empty_scans >= max_empty_scans:
-           TRUNCATE table, indicating that the lack of data is intentional (plumes gone).
+       - Check if within overnight lull window (02:00 - 16:00 UTC / 7 PM - 9 AM PDT):
+           Retain active features without incrementing miss counter or truncating.
+       - Outside overnight lull (active daytime passes):
+           Increment consecutive_empty_scans.
+           If consecutive_empty_scans >= max_empty_scans: TRUNCATE table.
     """
     data = extract()
     gdf = transform(data)
@@ -186,11 +196,29 @@ def run(max_empty_scans=3):
         )
         return msg
     else:
+        existing_count, max_end_utc = get_existing_table_metadata()
+        now_utc = datetime.now(timezone.utc)
+
+        if is_overnight_lull(now_utc, lull_start_hour, lull_end_hour) and existing_count > 0:
+            logger.info(
+                f"0 features in latest_smoke.geojson during overnight lull ({now_utc.strftime('%H:%M')} UTC). "
+                f"Retaining {existing_count} existing active features."
+            )
+            write_status_to_s3(
+                last_scan_dt=max_end_utc,
+                is_fallback=True,
+                display_date=max_end_utc.strftime("%Y-%m-%d") if max_end_utc else None,
+                features=existing_count,
+                consecutive_empty_scans=0,
+            )
+            return (
+                f"💨 0 features from NOAA during overnight lull; "
+                f"retained {existing_count} existing HMS smoke plume features 💨"
+            )
+
         status_data = read_status_from_s3()
         prev_empty = status_data.get("consecutive_empty_scans", 0)
         curr_empty = prev_empty + 1
-
-        existing_count, max_end_utc = get_existing_table_metadata()
 
         if curr_empty < max_empty_scans and existing_count > 0:
             logger.info(
