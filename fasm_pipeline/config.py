@@ -65,6 +65,8 @@ ELWOOD_EXCLUSION_S3_KEY = _env("ELWOOD_EXCLUSION_S3_KEY", "elwood/exclusion_list
 # --- S3 output object keys ---
 OUTLOOKS_OUTPUT_S3_KEY = _env("OUTLOOKS_OUTPUT_S3_KEY", "outlooks/published_outlooks.geojson")
 HMS_STATUS_S3_KEY = _env("HMS_STATUS_S3_KEY", "status/hms_status.json")
+HMS_SMOKE_ARCHIVE_PREFIX = _env("HMS_SMOKE_ARCHIVE_PREFIX", "hms/archive")
+HMS_STATUS_ARCHIVE_PREFIX = _env("HMS_STATUS_ARCHIVE_PREFIX", "status/archive")
 
 # --- Destination tables (unqualified; combine with DEST_SCHEMA via qualified()) ---
 AIRNOW_TABLE = _ident("AIRNOW_TABLE", "airnow_monitors")
