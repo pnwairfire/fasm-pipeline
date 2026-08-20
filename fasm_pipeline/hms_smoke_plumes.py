@@ -1,8 +1,9 @@
-"""HMS smoke plumes ingest -> pwfsl_map.hms_smoke_plume (+ S3 status file)."""
+"""HMS smoke plumes ingest -> pwfsl_map.hms_smoke_plume (+ S3 status file & EMF metrics)."""
 
+from datetime import datetime, timezone
 import json
 import logging
-from datetime import datetime, timezone
+import os
 
 import geopandas as gpd
 from shapely.geometry import shape
@@ -97,23 +98,12 @@ def load(gdf):
     return f"💨 Loaded {len(gdf)} HMS smoke plume features successfully 💨"
 
 
-def read_status_from_s3():
-    """Read existing hms_status.json from S3 to retrieve state like consecutive_empty_scans."""
-    s3 = init_epa_s3()
-    try:
-        results = s3.get_object(Bucket=fasm_layers_bucket(), Key=config.HMS_STATUS_S3_KEY)
-        return json.loads(results["Body"].read())
-    except Exception as e:
-        logger.warning(f"Could not read existing hms_status.json from S3: {e}")
-        return {}
-
-
 def write_status_to_s3(
     last_scan_dt,
     is_fallback=False,
     display_date=None,
     features=0,
-    consecutive_empty_scans=0,
+    staleness_hours=None,
 ):
     last_checked = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -135,7 +125,7 @@ def write_status_to_s3(
         "display_date": display_date,
         "is_fallback": is_fallback,
         "features": features,
-        "consecutive_empty_scans": consecutive_empty_scans,
+        "staleness_hours": round(staleness_hours, 2) if staleness_hours is not None else None,
     }
 
     s3 = init_epa_s3()
@@ -151,8 +141,43 @@ def write_status_to_s3(
     logger.info(
         f"Wrote hms_status.json — last_checked: {last_checked}, last_scan: {last_scan_str}, "
         f"display_date: {display_date}, is_fallback: {is_fallback}, features: {features}, "
-        f"consecutive_empty_scans: {consecutive_empty_scans}"
+        f"staleness_hours: {status['staleness_hours']}"
     )
+
+
+def emit_emf_metrics(
+    feature_count: int,
+    staleness_hours: float | None,
+    is_truncated: bool,
+    environment: str | None = None,
+) -> None:
+    """Emit AWS CloudWatch Embedded Metric Format (EMF) metrics to stdout."""
+    if environment is None:
+        environment = os.getenv("ENVIRONMENT", os.getenv("ENV", "dev"))
+
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    emf_payload = {
+        "_aws": {
+            "Timestamp": now_ms,
+            "CloudWatchMetrics": [
+                {
+                    "Namespace": "FASM/Pipeline",
+                    "Dimensions": [["Environment", "Stream"]],
+                    "Metrics": [
+                        {"Name": "PlumeFeatureCount", "Unit": "Count"},
+                        {"Name": "PlumeAgeHours", "Unit": "None"},
+                        {"Name": "PlumeTableTruncated", "Unit": "Count"},
+                    ],
+                }
+            ],
+        },
+        "Environment": environment,
+        "Stream": "hms-smoke-plumes",
+        "PlumeFeatureCount": feature_count,
+        "PlumeAgeHours": float(staleness_hours) if staleness_hours is not None else 0.0,
+        "PlumeTableTruncated": 1 if is_truncated else 0,
+    }
+    print(json.dumps(emf_payload), flush=True)
 
 
 def is_overnight_lull(now_dt=None, lull_start_hour=2, lull_end_hour=16):
@@ -166,20 +191,30 @@ def is_overnight_lull(now_dt=None, lull_start_hour=2, lull_end_hour=16):
         return hour >= lull_start_hour or hour < lull_end_hour
 
 
-def run(max_empty_scans=3, lull_start_hour=2, lull_end_hour=16):
+def run(staleness_threshold_hours: float | None = None) -> str:
     """Run the full HMS smoke plumes ingest end-to-end. Returns a summary string.
 
     Strategy:
     1. If new non-empty features arrive (len(gdf) > 0):
        - Immediately TRUNCATE existing table and load fresh features.
-       - Reset consecutive_empty_scans to 0.
+       - Write status to S3 (staleness_hours=0.0, is_fallback=False).
+       - Emit EMF metrics.
     2. If empty response arrives (len(gdf) == 0):
-       - Check if within overnight lull window (02:00 - 16:00 UTC / 7 PM - 9 AM PDT):
-           Retain active features without incrementing miss counter or truncating.
-       - Outside overnight lull (active daytime passes):
-           Increment consecutive_empty_scans.
-           If consecutive_empty_scans >= max_empty_scans: TRUNCATE table.
+       - Query existing table for MAX(end_utc) and count.
+       - Compute plume age in hours: (now_utc - max_end_utc).
+       - If age <= staleness_threshold_hours (default 24h):
+           Retain active features, write status (is_fallback=True, staleness_hours=age).
+           Emit EMF metrics (is_truncated=False).
+       - If age > staleness_threshold_hours:
+           Truncate table, write status (features=0, is_fallback=False, staleness_hours=age).
+           Emit EMF metrics (is_truncated=True).
+       - If table already empty:
+           Write status (features=0, is_fallback=False, staleness_hours=None).
+           Emit EMF metrics (is_truncated=False).
     """
+    if staleness_threshold_hours is None:
+        staleness_threshold_hours = config.HMS_SMOKE_STALENESS_HOURS
+
     data = extract()
     gdf = transform(data)
 
@@ -192,61 +227,64 @@ def run(max_empty_scans=3, lull_start_hour=2, lull_end_hour=16):
             is_fallback=False,
             display_date=max_end.strftime("%Y-%m-%d") if max_end else None,
             features=len(gdf),
-            consecutive_empty_scans=0,
+            staleness_hours=0.0,
         )
+        emit_emf_metrics(feature_count=len(gdf), staleness_hours=0.0, is_truncated=False)
         return msg
     else:
         existing_count, max_end_utc = get_existing_table_metadata()
         now_utc = datetime.now(timezone.utc)
 
-        if is_overnight_lull(now_utc, lull_start_hour, lull_end_hour) and existing_count > 0:
-            logger.info(
-                f"0 features in latest_smoke.geojson during overnight lull ({now_utc.strftime('%H:%M')} UTC). "
-                f"Retaining {existing_count} existing active features."
-            )
-            write_status_to_s3(
-                last_scan_dt=max_end_utc,
-                is_fallback=True,
-                display_date=max_end_utc.strftime("%Y-%m-%d") if max_end_utc else None,
-                features=existing_count,
-                consecutive_empty_scans=0,
-            )
-            return (
-                f"💨 0 features from NOAA during overnight lull; "
-                f"retained {existing_count} existing HMS smoke plume features 💨"
-            )
+        if existing_count > 0 and max_end_utc is not None:
+            if max_end_utc.tzinfo is None:
+                max_end_utc = max_end_utc.replace(tzinfo=timezone.utc)
 
-        status_data = read_status_from_s3()
-        prev_empty = status_data.get("consecutive_empty_scans", 0)
-        curr_empty = prev_empty + 1
+            age_seconds = (now_utc - max_end_utc).total_seconds()
+            age_hours = round(max(0.0, age_seconds / 3600.0), 2)
 
-        if curr_empty < max_empty_scans and existing_count > 0:
-            logger.info(
-                f"0 features in latest_smoke.geojson (consecutive empty scan {curr_empty}/{max_empty_scans}). "
-                f"Retaining {existing_count} existing active features."
-            )
-            write_status_to_s3(
-                last_scan_dt=max_end_utc,
-                is_fallback=True,
-                display_date=max_end_utc.strftime("%Y-%m-%d") if max_end_utc else None,
-                features=existing_count,
-                consecutive_empty_scans=curr_empty,
-            )
-            return (
-                f"💨 0 features from NOAA (scan {curr_empty}/{max_empty_scans}); "
-                f"retained {existing_count} existing HMS smoke plume features 💨"
-            )
+            if age_hours <= staleness_threshold_hours:
+                logger.info(
+                    f"0 features in latest_smoke.geojson, but existing plumes are {age_hours}h old "
+                    f"(<= {staleness_threshold_hours}h threshold). Retaining {existing_count} existing active features."
+                )
+                write_status_to_s3(
+                    last_scan_dt=max_end_utc,
+                    is_fallback=True,
+                    display_date=max_end_utc.strftime("%Y-%m-%d") if max_end_utc else None,
+                    features=existing_count,
+                    staleness_hours=age_hours,
+                )
+                emit_emf_metrics(feature_count=existing_count, staleness_hours=age_hours, is_truncated=False)
+                return (
+                    f"💨 0 features from NOAA (age {age_hours}h <= {staleness_threshold_hours}h); "
+                    f"retained {existing_count} existing HMS smoke plume features 💨"
+                )
+            else:
+                logger.info(
+                    f"0 features in latest_smoke.geojson and existing plumes are {age_hours}h old "
+                    f"(> {staleness_threshold_hours}h threshold). Truncating table to clear stale plume data."
+                )
+                truncate()
+                write_status_to_s3(
+                    last_scan_dt=None,
+                    is_fallback=False,
+                    display_date=None,
+                    features=0,
+                    staleness_hours=age_hours,
+                )
+                emit_emf_metrics(feature_count=0, staleness_hours=age_hours, is_truncated=True)
+                return (
+                    f"💨 0 features from NOAA for {age_hours}h (> {staleness_threshold_hours}h); "
+                    f"truncated HMS smoke plume table 💨"
+                )
         else:
-            logger.info(
-                f"0 features in latest_smoke.geojson for {curr_empty} consecutive scan(s) "
-                f"(>= {max_empty_scans} limit). Truncating table to clear old plume data."
-            )
-            truncate()
+            logger.info("0 features in latest_smoke.geojson and table is already empty.")
             write_status_to_s3(
                 last_scan_dt=None,
                 is_fallback=False,
                 display_date=None,
                 features=0,
-                consecutive_empty_scans=curr_empty,
+                staleness_hours=None,
             )
-            return f"💨 0 features from NOAA for {curr_empty} consecutive scan(s); truncated HMS smoke plume table 💨"
+            emit_emf_metrics(feature_count=0, staleness_hours=None, is_truncated=False)
+            return "💨 0 features from NOAA; plume table already empty 💨"

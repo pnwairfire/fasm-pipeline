@@ -80,3 +80,6 @@ HMS_SMOKE_TABLE = _ident("HMS_SMOKE_TABLE", "hms_smoke_plume")
 OUTLOOKS_TABLE = _ident("OUTLOOKS_TABLE", "outlooks")
 PURPLE_AIR_EXCLUSION_TABLE = _ident("PURPLE_AIR_EXCLUSION_TABLE", "purple_air_exclusion")
 ELWOOD_EXCLUSION_TABLE = _ident("ELWOOD_EXCLUSION_TABLE", "elwood_exclusion")
+
+# --- Thresholds & retention ---
+HMS_SMOKE_STALENESS_HOURS = float(_env("HMS_SMOKE_STALENESS_HOURS", "24.0"))
