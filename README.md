@@ -88,8 +88,22 @@ for the full list with default values.
 > `pwfsl_map.*` / `pwfsl_historical.*` directly, so `DEST_SCHEMA` does **not**
 > repoint that stream — edit the SQL in `fasm_pipeline/sql/` instead.
 
-## Logging
+## Logging & Observability
 
 Pipelines log to stdout under the `fasm_pipeline` logger (level via
 `--log-level`, default `INFO`). Each run logs an `EXTRACTED … / TRANSFORMED … /
 LOADED …` trail and a final summary.
+
+## Data Observability & Canary Monitoring
+
+When run inside Prefect (`fasm_pipeline_wrapper_flow`), each pipeline is automatically integrated into the AirFire observability and chain-of-custody platform:
+
+1. **Persistent Audit Ledger (`pwfsl_map.audit_pipeline_ledger`)**:
+   Every stream execution logs record counts, observation timestamps, staleness metrics, and execution duration. If 0 records are loaded, a `SILENT_FAILURE_ZERO_LOADED` alert is published to CloudWatch EMF and Slack.
+
+2. **AirFire Data Auditor Console**:
+   Provides on-demand 4-stage bypass auditing to verify raw upstream sources against PostGIS serving tables and isolated transformations.
+
+3. **Live Vector Tile Freshness Canary (`tileserver-canary-flow`)**:
+   Scheduled every 10 minutes, the canary systematically fetches and decodes `.pbf` tiles from the tileserver, attributes data freshness to state environmental agencies (e.g. Oregon DEQ, Washington Ecology, California CARB, Idaho DEQ, Montana DEQ), and performs dual-DB cross-verification to prevent stale data delivery.
+

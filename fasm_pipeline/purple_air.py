@@ -1,10 +1,10 @@
 """PurpleAir sensors ingest -> pwfsl_map.purple_air."""
 
+import io
 import logging
 
 import numpy as np
 import pandas as pd
-from psycopg2.extras import execute_values
 
 from fasm_pipeline import config
 from fasm_pipeline.aqi import pm25_to_aqi
@@ -37,27 +37,36 @@ def process(df):
 def load(df):
     table = config.qualified(config.PURPLE_AIR_TABLE)
     conn = get_ts_db_conn()
+
+    upload_df = pd.DataFrame({
+        "unit_id": df["sensor_index"],
+        "latitude": df["latitude"],
+        "longitude": df["longitude"],
+        "utc_ts": df["utc_ts"],
+        "corrected_pm25": df["epa_pm25"],
+        "nowcast": df["epa_nowcast"],
+        "timezone": df["timezone"],
+        "raw_pm25": df["raw_pm25"],
+        "aqi": df["aqi"],
+        "latency_mins": df["latency_mins"],
+        "status": df["status"]
+    })
+
+    buffer = io.StringIO()
+    upload_df.to_csv(buffer, index=False, header=False, na_rep="\\N")
+    buffer.seek(0)
+
     try:
         with conn.cursor() as c:
             c.execute(f"TRUNCATE {table};")
-            execute_values(
-                cur=c,
-                sql=f"""
-                    INSERT INTO {table}
-                    (
-                        unit_id, latitude, longitude, utc_ts, corrected_pm25,
-                        nowcast, timezone, raw_pm25, aqi, latency_mins, status
-                    )
-                    VALUES %s;
+            c.copy_expert(
+                f"""
+                COPY {table} (
+                    unit_id, latitude, longitude, utc_ts, corrected_pm25,
+                    nowcast, timezone, raw_pm25, aqi, latency_mins, status
+                ) FROM STDIN WITH (FORMAT csv, NULL '\\N')
                 """,
-                argslist=df.to_dict(orient="records"),
-                template="""
-                    (
-                        %(sensor_index)s, %(latitude)s, %(longitude)s,
-                        %(utc_ts)s, %(epa_pm25)s, %(epa_nowcast)s,
-                        %(timezone)s, %(raw_pm25)s, %(aqi)s, %(latency_mins)s, %(status)s
-                    )
-                """,
+                buffer,
             )
         conn.commit()
     except Exception:
@@ -68,6 +77,7 @@ def load(df):
 
     logger.info(f"Inserted {len(df)} records to {table}")
     return f"💜 Loaded {len(df)} PurpleAir records successfully 💜"
+
 
 
 def run():
