@@ -226,9 +226,9 @@ def test_run_with_features():
 
 def test_run_zero_features_within_staleness_window():
     empty_gdf = gpd.GeoDataFrame(columns=["satellite", "density", "start_utc", "end_utc", "geom"])
-    now = datetime(2026, 8, 8, 12, 0, tzinfo=timezone.utc)
-    # 10 hours old (well within 24h)
-    last_valid_end = now - timedelta(hours=10)
+    now = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
+    # 48 hours old (well within 72h default)
+    last_valid_end = now - timedelta(hours=48)
     mock_extract = (
         b'{"features": []}',
         [],
@@ -247,7 +247,7 @@ def test_run_zero_features_within_staleness_window():
     ):
         mock_dt.now.return_value = now
 
-        res = hms_smoke_plumes.run(staleness_threshold_hours=24.0)
+        res = hms_smoke_plumes.run()  # Tests default 72.0h threshold
 
         mock_truncate.assert_not_called()
         mock_write_status.assert_called_once()
@@ -255,22 +255,22 @@ def test_run_zero_features_within_staleness_window():
         assert write_kwargs["last_scan_dt"] == last_valid_end
         assert write_kwargs["is_fallback"] is True
         assert write_kwargs["features"] == 25
-        assert write_kwargs["staleness_hours"] == 10.0
+        assert write_kwargs["staleness_hours"] == 48.0
         assert write_kwargs["sha256_hash"] == "mocksha_empty"
         mock_emf.assert_called_once()
-        assert "age 10.0h <= 24.0h" in res
+        assert "age 48.0h <= 72.0h" in res
         assert "retained 25 existing HMS smoke plume features" in res
 
 
 def test_run_zero_features_exceeds_staleness_window():
     empty_gdf = gpd.GeoDataFrame(columns=["satellite", "density", "start_utc", "end_utc", "geom"])
-    now = datetime(2026, 8, 8, 12, 0, tzinfo=timezone.utc)
-    # 25 hours old (exceeds 24h threshold)
-    last_valid_end = now - timedelta(hours=25)
+    now = datetime(2026, 8, 11, 15, 0, tzinfo=timezone.utc)
+    # 75 hours old (exceeds 72h default threshold)
+    last_valid_end = now - timedelta(hours=75)
     mock_extract = (
         b'{"features": []}',
         [],
-        {"sha256_hash": "mocksha_stale", "source_last_modified": "2026-08-07T11:00:00Z"},
+        {"sha256_hash": "mocksha_stale", "source_last_modified": "2026-08-08T12:00:00Z"},
     )
 
     with (
@@ -285,7 +285,7 @@ def test_run_zero_features_exceeds_staleness_window():
     ):
         mock_dt.now.return_value = now
 
-        res = hms_smoke_plumes.run(staleness_threshold_hours=24.0)
+        res = hms_smoke_plumes.run()  # Tests default 72.0h threshold
 
         mock_truncate.assert_called_once()
         mock_write_status.assert_called_once()
@@ -293,10 +293,10 @@ def test_run_zero_features_exceeds_staleness_window():
         assert write_kwargs["last_scan_dt"] is None
         assert write_kwargs["is_fallback"] is False
         assert write_kwargs["features"] == 0
-        assert write_kwargs["staleness_hours"] == 25.0
+        assert write_kwargs["staleness_hours"] == 75.0
         assert write_kwargs["sha256_hash"] == "mocksha_stale"
         mock_emf.assert_called_once()
-        assert "for 25.0h (> 24.0h)" in res
+        assert "for 75.0h (> 72.0h)" in res
         assert "truncated HMS smoke plume table" in res
 
 
@@ -317,7 +317,7 @@ def test_run_zero_features_empty_table():
         patch("fasm_pipeline.hms_smoke_plumes.write_status_to_s3") as mock_write_status,
         patch("fasm_pipeline.hms_smoke_plumes.emit_emf_metrics") as mock_emf,
     ):
-        res = hms_smoke_plumes.run(staleness_threshold_hours=24.0)
+        res = hms_smoke_plumes.run()
 
         mock_truncate.assert_not_called()
         mock_write_status.assert_called_once()
