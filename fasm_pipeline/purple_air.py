@@ -38,19 +38,21 @@ def load(df):
     table = config.qualified(config.PURPLE_AIR_TABLE)
     conn = get_ts_db_conn()
 
-    upload_df = pd.DataFrame({
-        "unit_id": df["sensor_index"],
-        "latitude": df["latitude"],
-        "longitude": df["longitude"],
-        "utc_ts": df["utc_ts"],
-        "corrected_pm25": df["epa_pm25"],
-        "nowcast": df["epa_nowcast"],
-        "timezone": df["timezone"],
-        "raw_pm25": df["raw_pm25"],
-        "aqi": df["aqi"],
-        "latency_mins": df["latency_mins"],
-        "status": df["status"]
-    })
+    upload_df = pd.DataFrame(
+        {
+            "unit_id": df["sensor_index"],
+            "latitude": df["latitude"],
+            "longitude": df["longitude"],
+            "utc_ts": df["utc_ts"],
+            "corrected_pm25": df["epa_pm25"],
+            "nowcast": df["epa_nowcast"],
+            "timezone": df["timezone"],
+            "raw_pm25": df["raw_pm25"],
+            "aqi": df["aqi"],
+            "latency_mins": df["latency_mins"],
+            "status": df["status"],
+        }
+    )
 
     buffer = io.StringIO()
     upload_df.to_csv(buffer, index=False, header=False, na_rep="\\N")
@@ -77,7 +79,6 @@ def load(df):
 
     logger.info(f"Inserted {len(df)} records to {table}")
     return f"💜 Loaded {len(df)} PurpleAir records successfully 💜"
-
 
 
 def run():
