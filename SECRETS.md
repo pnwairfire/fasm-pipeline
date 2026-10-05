@@ -7,6 +7,7 @@ change is needed here — this wiring lives in the ECS task definition (i.e. you
 Prefect ECS work pool's base job template), not in this repo.
 
 Split values two ways:
+
 - **Non-secret config** (hosts, users, DB names, bucket names, table/schema
   overrides) → the task definition's `environment` block, in plaintext.
 - **Secrets** (DB passwords, AWS secret keys) → the `secrets` block, pulled from

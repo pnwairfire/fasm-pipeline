@@ -7,7 +7,7 @@ FASM **ETL pipelines**. Each pipeline pulls source data, transforms it, and load
 Each stream is a container command (also runnable as `python -m fasm_pipeline <name>`):
 
 | Command | Pulls from | Loads to |
-|---|---|---|
+| --- | --- | --- |
 | `airnow` | S3 (AirNow geojson) | `pwfsl_map.airnow_monitors` |
 | `clarity` | S3 (Clarity geojson) | `pwfsl_map.clarity_sensors` |
 | `mobile-monitors` | S3 (AIRSIS + WRCC geojson) | `pwfsl_map.airsis_monitors`, `pwfsl_map.wrcc_monitors` |
@@ -56,7 +56,7 @@ else is optional (defaults reproduce production behavior).
 ### Required — credentials & buckets
 
 | Variable | Purpose |
-|---|---|
+| --- | --- |
 | `TS_DB_HOST` / `TS_DB_PORT` / `TS_DB_USER` / `TS_DB_PW` / `TS_DB_DATABASE` | Tile Server DB — **destination** for every stream (schema `pwfsl_map`) |
 | `AIRFIRE_DB_HOST` / `AIRFIRE_DB_PORT` / `AIRFIRE_DB_USER` / `AIRFIRE_DB_PW` / `AIRFIRE_DB_DATABASE` | AirFire DB — **source** for fire + outlook streams (schemas `fire_info`, `outlook_v7`) |
 | `AWS_ACCESS_KEY` / `AWS_SECRET_ACCESS_KEY` / `AFE_BUCKET` | AirFire S3 — source data |
@@ -106,4 +106,3 @@ When run inside Prefect (`fasm_pipeline_wrapper_flow`), each pipeline is automat
 
 3. **Live Vector Tile Freshness Canary (`tileserver-canary-flow`)**:
    Scheduled every 10 minutes, the canary systematically fetches and decodes `.pbf` tiles from the tileserver, attributes data freshness to state environmental agencies (e.g. Oregon DEQ, Washington Ecology, California CARB, Idaho DEQ, Montana DEQ), and performs dual-DB cross-verification to prevent stale data delivery.
-
